@@ -1,0 +1,4 @@
+compatibility_date = "2024-01-01"
+main               = "src/index.js"
+name               = "front-end-kata"
+node_compat        = true

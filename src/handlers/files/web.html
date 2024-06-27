@@ -1,0 +1,140 @@
+<body>
+    search by name <input type="search" id="searchText">
+    sort <select id="sortDropdown">
+        <option value="nosort" selected>No sort</option>
+        <option value="name">Name</option>
+        <option value="size">Size</option>
+        <option value="date">Date</option>
+    </select>
+    <br>
+    <span id="fileList"></span>
+    <script>
+        //! not sure if how i am doing mixed search/sort is really best practice
+        let currentPath = "/"; // e.g /expenses/extended
+        let fullFileSet = [];
+        let currentSortedFileSet = [];
+
+        async function getRoot() {
+            let filesReq = await fetch(`http://127.0.0.1:8787/api/viewfolder/root`);
+            let files = await filesReq.json();
+            console.log(1, files);
+            writeList(files);
+            fullFileSet = files;
+            currentSortedFileSet = files;
+        }
+
+        async function getFolder(folder, currentPathIsAlreadyWritten=false) {
+            if (!currentPathIsAlreadyWritten) {
+                if (currentPath == "/") currentPath += folder;
+                else currentPath += "/" + folder;
+            }
+
+            let filesReq = await fetch(`http://127.0.0.1:8787/api/viewfolder${currentPath}`);
+            let files = await filesReq.json();
+            console.log(1, files);
+            writeList(files);
+            fullFileSet = files;
+            currentSortedFileSet = files;
+        };
+
+        function writeList(fileSet) {
+            document.getElementById("fileList").innerHTML = "";
+            fileSet.forEach(file => {
+                if (file.type == "folder")
+                {
+                    document.getElementById("fileList").innerHTML += `<a href="#" onclick="getFolder('${file.name}')">${file.name}</a> ${file.type} ${file.files.length} files<br>`;
+                }
+                else
+                {
+                    document.getElementById("fileList").innerHTML += `${file.name} ${file.type} ${file.added}<br>`;
+                }
+            });
+
+            // still operating with the presumption that only the top level has folders
+            document.getElementById("fileList").innerHTML += `<a href="#" onclick="moveBack()">Back</a>`
+        }
+
+        function searchUpdate() {
+            let searchFilteredArray = [];
+            let currentSearch = document.getElementById("searchText").value;
+            let regex = new RegExp(String.raw`(${currentSearch})`, "gi");
+            currentSortedFileSet.forEach(file => {
+                if (file.name.match(regex)) {
+                    searchFilteredArray.push(file);
+                }
+            })
+
+            writeList(searchFilteredArray);
+        }
+
+        function moveBack() {
+            console.log("start",currentPath);
+            //remove last part of path
+            // console.log(currentPath);
+            currentPathArray = currentPath.split("/");
+            currentPathArray.pop(); 
+            // console.log(currentPathArray);
+            currentPath = currentPathArray.join("/");
+            
+            //if the moveback moves back to the root directory the current path will be an empty string
+            if (currentPath.length == 0) currentPath = "/";
+            
+            console.log("end", currentPath);
+            getFolder(currentPath, true);
+        }
+
+        function sortUpdate() {
+            let sortFilteredArray = [];
+            let currentSort = document.getElementById("sortDropdown").value;
+            switch (currentSort) {
+                case "nosort":
+                    sortFilteredArray = fullFileSet;
+                    break;
+
+                case "name":
+                    //sortbyname
+                    sortFilteredArray = fullFileSet.toSorted((a, b) => {
+                        let nameA = a.name.toLowerCase();
+                        let nameB = b.name.toLowerCase();
+                        if (nameA < nameB) return -1;
+                        if (nameA > nameB) return 1;
+                        return 0;
+                    });
+                    break;
+
+                // TODO: add sizes to folders and files to allow for this
+                case "size":
+                    break;
+
+                case "date":
+                    sortFilteredArray = fullFileSet.toSorted((a, b) => {
+                        //folders dont have added date
+                        if (a.added == undefined || a.added == null) return -1;
+                        if (b.added == undefined || b.added == null) return 1;
+                        if ((a.added == undefined || a.added == null) && (b.added == undefined || b.added == null)) return 0;
+                        
+                        let splitDateA = a.added.split("-");
+                        let splitDateB = b.added.split("-");
+
+                        let dateA = new Date(splitDateA[0], splitDateA[1] - 1, splitDateA[2]).getTime();
+                        let dateB = new Date(splitDateB[0], splitDateB[1] - 1, splitDateB[2]).getTime();
+
+                        if (dateA < dateB) return -1;
+                        if (dateA > dateB) return 1;
+                        return 0;
+                    });
+                    break;
+
+            }
+            
+            currentSortedFileSet = sortFilteredArray;
+            //writeList(sortFilteredArray);
+            searchUpdate(); // filter out wrong results from new sorted array
+        }
+
+        document.getElementById("searchText").addEventListener("input", () => searchUpdate());
+        document.getElementById("sortDropdown").addEventListener("change", () => sortUpdate());
+
+        getRoot();
+    </script>
+</body>
